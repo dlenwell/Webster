@@ -67,7 +67,7 @@ class ValidDict(dict):
     
     _is_valid = False
     
-    def __init__(self, schema = {}, to_import = None):
+    def __init__(self, schema = {}, _import = {}):
         """
             __init__
             
@@ -80,11 +80,9 @@ class ValidDict(dict):
         """
         self.schema = schema        
         
-        if to_import:
-            # if to import pass to import function (not built yet)
-            pass    
-    
-    
+        super(ValidDict,self).__init__(_import)
+        
+            
     @property
     def invalid(self):
         """
@@ -109,31 +107,19 @@ class ValidDict(dict):
         
         return self._error
     
-        
-    
-    # lets override some built in behavior
-    def __getattr__(self, name):
-        try:
-            return self[name]
-        except KeyError as e:
-            raise AttributeError(e)
-
-    def __setattr__(self, name, value):
-        self[name] = value
-
-    def __iter__(self):
-        return iter(self.keys())
-
-    def __repr__(self):
-        return pprint.pformat(self)
-    
     
     def _validate_value(self, _re, value):
         """
             validates the provided regex against the provided value
             
         """
-        return re.compile(_re,re.IGNORECASE|re.DOTALL).search(value)
+        rg = re.compile(_re,re.IGNORECASE|re.DOTALL)
+        m = rg.search(value)
+        
+        if m:
+            return True
+        else: 
+            return False
     
     
     def _validate_dict(self, _key, _to_validate):
@@ -155,25 +141,33 @@ class ValidDict(dict):
                 
                 
         """
-        return_value = True
+        return_value = True # default to true .. 
         
         for p in _key.iterkeys():
             if not _to_validate.has_key(p):
-                self._error['missing'].append(p)
+                self._missing.append(p)
                 return_value = False
                 
-            elif isinstance(_key[p], dict):
-                if not isinstance(_to_validate[p], dict):
-                    self._error['missing'].append(_key[p].keys())
-                    return_value = False
+                
+            else: # this key is in the dict .. lets continue
+                if not isinstance(_key[p], dict): # this value isn't a dict
+                    """validate regex here """
+                    if not self._validate_value(_key[p], _to_validate[p]):
+                        self._invalid.append(p)
+                        return_value = False
+                            
+                     
                         
-                elif not self._validate_dict(_key[p], _to_validate[p]):
-                    return_value = False
-            else: 
-                """validate regex here """
-                if self._validate_value(_key[p], _to_validate[p]):
-                    self._error['invalid'].append(p)
-                    return_value = False
+                else: # this value is supposed to be a dict 
+                    if not isinstance(_to_validate[p], dict):
+                        # its not so add all the keys into the missing 
+                        self._missing.append(_key[p].keys())
+                        return_value = False
+                            
+                    elif not self._validate_dict(_key[p], _to_validate[p]):
+                        # it is a dict so lets trigger some recursion and loop it on its own 
+                        return_value = False
+                
                     
         return return_value
         
@@ -186,7 +180,7 @@ class ValidDict(dict):
         if self.is_valid():
             return True
         else:
-            return self._error
+            return self.error
     
     
     def is_valid(self):
@@ -195,14 +189,14 @@ class ValidDict(dict):
         
         """
         #clear missing 
-        while self._error['missing']: self._error['missing'].pop()
-        while self._error['invalid']: self._error['invalid'].pop()
+        while self._missing: self._missing.pop()
+        while self._invalid: self._invalid.pop()
         
         # kick off the validation loop on my self 
         if self._validate_dict(self.schema, self):         
             return True
         else:
-            print 'missing keys: ', str(self._error)      
+            print 'missing keys: ', str(self.error)      
             return False
         
   
